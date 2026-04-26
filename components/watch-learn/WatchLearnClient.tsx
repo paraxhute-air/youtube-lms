@@ -23,7 +23,7 @@ export type FilterItem =
   | { kind: "keyword"; label: string }
   | { kind: "channel"; label: string; channelId: string };
 
-type SortOrder = "relevance" | "date" | "viewCount";
+type SortOrder = "date" | "viewCount";
 
 function filterKey(f: FilterItem): string {
   if (f.kind === "channel") return `ch:${f.channelId}`;
@@ -62,7 +62,6 @@ async function fetchSingle(
 
 // ── sort options ──────────────────────────────────────────────
 const SORT_OPTIONS: { value: SortOrder; label: string }[] = [
-  { value: "relevance", label: "관련순" },
   { value: "date",      label: "최신순" },
   { value: "viewCount", label: "조회순" },
 ];
@@ -111,19 +110,14 @@ function FilterChips({
 
 function SortButtons({
   current,
-  isAll,
   onChange,
 }: {
   current: SortOrder;
-  isAll: boolean;
   onChange: (s: SortOrder) => void;
 }) {
-  const options = isAll
-    ? SORT_OPTIONS.filter((o) => o.value !== "relevance")
-    : SORT_OPTIONS;
   return (
     <div className="flex gap-1">
-      {options.map((o) => (
+      {SORT_OPTIONS.map((o) => (
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
@@ -180,7 +174,7 @@ const SkeletonRow = () => (
 // ── main component ────────────────────────────────────────────
 export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; userId: string }) {
   const [selectedIdxs, setSelectedIdxs] = useState<Set<number>>(new Set([0]));
-  const [sort, setSort]   = useState<SortOrder>("relevance");
+  const [sort, setSort]   = useState<SortOrder>("date");
   const [year, setYear]   = useState("");
   const [month, setMonth] = useState("");
   const [lang, setLang]   = useState("ko");
@@ -220,8 +214,6 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
       return next;
     });
   }
-
-  const isAll = selectedIdxs.size === 1 && selectedIdxs.has(0) && filters[0]?.kind === "all";
 
   const load = useCallback(async (
     idxs: Set<number>,
@@ -384,10 +376,7 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
         next.add(idx);
       }
 
-      const hasKeyword = Array.from(next).some((i) => filters[i]?.kind === "keyword");
-      const nextSort   = hasKeyword ? sort : (sort === "relevance" ? "date" : sort);
-      if (!hasKeyword && sort === "relevance") setSort("date");
-      load(next, nextSort, year, month, lang, false);
+      load(next, sort, year, month, lang, false);
       return next;
     });
   }
@@ -418,9 +407,7 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
 
   // initial load
   useEffect(() => {
-    const initSort: SortOrder = filters[0]?.kind === "all" ? "date" : "relevance";
-    setSort(initSort);
-    load(new Set([0]), initSort, "", "", "ko", false);
+    load(new Set([0]), "date", "", "", "ko", false);
   }, [filters, load]);
 
   // ── render ──────────────────────────────────────────────────
@@ -446,7 +433,7 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
               <span className="ml-2 text-[var(--accent-2)]">■</span> channel
             </span>
           </div>
-          <SortButtons current={sort} isAll={isAll} onChange={handleSortChange} />
+          <SortButtons current={sort} onChange={handleSortChange} />
         </div>
 
         <FilterChips filters={filters} selectedIdxs={selectedIdxs} onToggle={handleToggle} />

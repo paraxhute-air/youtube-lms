@@ -45,6 +45,9 @@ export async function GET(request: Request) {
       if (lang === "ko" || lang === "en") {
         searchUrl.searchParams.set("relevanceLanguage", lang);
       }
+      if (lang === "en") {
+        searchUrl.searchParams.set("regionCode", "US");
+      }
       // lang=all: relevanceLanguage 미설정 — 전체 언어 결과 반환
     }
     searchUrl.searchParams.set("order", order);
@@ -122,7 +125,7 @@ export async function GET(request: Request) {
 
     const hasKo = (s: string) => /[가-힣]/.test(s);
     if (lang === "ko") {
-      finalVideos = finalVideos.filter(v => hasKo(v.channelTitle) && hasKo(v.title));
+      finalVideos = finalVideos.filter(v => hasKo(v.title));
     } else if (lang === "en") {
       finalVideos = finalVideos.filter(v => /[a-zA-Z]/.test(v.title) && !hasKo(v.title));
     }

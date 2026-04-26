@@ -5,16 +5,24 @@ import type { Database } from "@/lib/types/database";
 
 type Channel = Database["public"]["Tables"]["search_channels"]["Row"];
 
-function parseChannelUrl(input: string): { type: "handle" | "id"; value: string } | null {
+function parseChannelUrl(input: string): { type: "handle" | "id" | "username"; value: string } | null {
   const trimmed = input.trim();
 
-  // https://www.youtube.com/@handle 또는 https://www.youtube.com/@handle/videos
+  // https://www.youtube.com/@handle
   const handleMatch = trimmed.match(/youtube\.com\/@([^/?&#]+)/);
   if (handleMatch) return { type: "handle", value: handleMatch[1] };
 
   // https://www.youtube.com/channel/UCxxxxxx
   const idMatch = trimmed.match(/youtube\.com\/channel\/(UC[^/?&#]+)/);
   if (idMatch) return { type: "id", value: idMatch[1] };
+
+  // https://www.youtube.com/c/ChannelName (legacy)
+  const cMatch = trimmed.match(/youtube\.com\/c\/([^/?&#]+)/);
+  if (cMatch) return { type: "username", value: cMatch[1] };
+
+  // https://www.youtube.com/user/username (legacy)
+  const userMatch = trimmed.match(/youtube\.com\/user\/([^/?&#]+)/);
+  if (userMatch) return { type: "username", value: userMatch[1] };
 
   // @handle (URL 없이 입력)
   if (trimmed.startsWith("@")) return { type: "handle", value: trimmed.slice(1) };
@@ -26,7 +34,7 @@ function parseChannelUrl(input: string): { type: "handle" | "id"; value: string 
 }
 
 async function resolveChannel(
-  parsed: { type: "handle" | "id"; value: string },
+  parsed: { type: "handle" | "id" | "username"; value: string },
   apiKey: string,
 ): Promise<{ channelId: string; channelName: string } | null> {
   const url = new URL("https://www.googleapis.com/youtube/v3/channels");
@@ -35,6 +43,8 @@ async function resolveChannel(
 
   if (parsed.type === "handle") {
     url.searchParams.set("forHandle", parsed.value);
+  } else if (parsed.type === "username") {
+    url.searchParams.set("forUsername", parsed.value);
   } else {
     url.searchParams.set("id", parsed.value);
   }

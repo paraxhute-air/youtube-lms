@@ -33,8 +33,8 @@ export function VideoList({ logs: initialLogs }: { logs: VideoLog[] }) {
         style={{ background: "var(--bg-panel)", border: "1px solid var(--border)" }}
       >
         <p className="text-[var(--muted)] text-sm">$ 기록이 없습니다</p>
-        <Link href="/curation" className="text-[var(--accent)] text-xs mt-2 block hover:underline">
-          큐레이션에서 영상을 찾아보세요 →
+        <Link href="/watch-learn" className="text-[var(--accent)] text-xs mt-2 block hover:underline">
+          watch & learn에서 영상을 찾아보세요 →
         </Link>
       </div>
     );

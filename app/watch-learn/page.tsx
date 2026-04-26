@@ -1,11 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { CurationClient } from "@/components/curation/CurationClient";
+import { WatchLearnClient } from "@/components/watch-learn/WatchLearnClient";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import type { FilterItem } from "@/components/curation/CurationClient";
+import type { FilterItem } from "@/components/watch-learn/WatchLearnClient";
 
-export default async function CurationPage() {
+export default async function WatchLearnPage() {
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -60,9 +60,9 @@ export default async function CurationPage() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-[var(--accent)] font-bold text-lg">
-                <span className="text-[var(--muted)]">$ </span>curation
+                <span className="text-[var(--muted)]">$ </span>watch & learn
               </h1>
-              <p className="text-[var(--muted)] text-xs mt-1">AI 학습 영상 큐레이션</p>
+              <p className="text-[var(--muted)] text-xs mt-1">AI 학습 영상 모아보기</p>
             </div>
             <div className="flex gap-2">
               <Link
@@ -100,7 +100,7 @@ export default async function CurationPage() {
               </div>
             </div>
           ) : (
-            <CurationClient filters={filters} userId={user.id} />
+            <WatchLearnClient filters={filters} userId={user.id} />
           )}
         </div>
       </main>

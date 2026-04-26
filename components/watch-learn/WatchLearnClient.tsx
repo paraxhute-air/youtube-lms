@@ -186,7 +186,7 @@ const SkeletonGrid = () => (
   </div>
 );
 
-export function CurationClient({ filters, userId }: { filters: FilterItem[]; userId: string }) {
+export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; userId: string }) {
   const [selectedIdxs, setSelectedIdxs] = useState<Set<number>>(new Set([0]));
   const [sort, setSort] = useState<SortOrder>("relevance");
   const [year, setYear] = useState<string>("");

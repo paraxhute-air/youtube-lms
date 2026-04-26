@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -31,7 +31,6 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // 보호된 라우트: 로그인 필요
   const protectedRoutes = ["/dashboard", "/report", "/settings"];
   const isProtected = protectedRoutes.some((r) => pathname.startsWith(r));
 
@@ -41,7 +40,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // 이미 로그인된 상태에서 /auth 접근 시 대시보드로
   if (user && pathname.startsWith("/auth")) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";

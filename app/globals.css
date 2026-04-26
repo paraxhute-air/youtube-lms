@@ -1,26 +1,189 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ── Theme variables ─────────────────────────────────────── */
+
+/* Monokai (default) */
+:root,
+html[data-theme="monokai"] {
+  color-scheme: dark;
+  --bg:        #272822;
+  --bg-panel:  #1e1f1c;
+  --bg-hover:  #3e3d32;
+  --border:    #49483e;
+  --fg:        #f8f8f2;
+  --muted:     #75715e;
+  --accent:    #a6e22e;
+  --accent-2:  #66d9e8;
+  --accent-3:  #fd971f;
+  --danger:    #f92672;
+  --warn:      #e6db74;
 }
 
+html[data-theme="dracula"] {
+  color-scheme: dark;
+  --bg:        #282a36;
+  --bg-panel:  #21222c;
+  --bg-hover:  #44475a;
+  --border:    #44475a;
+  --fg:        #f8f8f2;
+  --muted:     #6272a4;
+  --accent:    #50fa7b;
+  --accent-2:  #8be9fd;
+  --accent-3:  #ffb86c;
+  --danger:    #ff5555;
+  --warn:      #f1fa8c;
+}
+
+html[data-theme="solarized-dark"] {
+  color-scheme: dark;
+  --bg:        #002b36;
+  --bg-panel:  #073642;
+  --bg-hover:  #094552;
+  --border:    #073642;
+  --fg:        #839496;
+  --muted:     #586e75;
+  --accent:    #859900;
+  --accent-2:  #2aa198;
+  --accent-3:  #cb4b16;
+  --danger:    #dc322f;
+  --warn:      #b58900;
+}
+
+html[data-theme="one-dark"] {
+  color-scheme: dark;
+  --bg:        #282c34;
+  --bg-panel:  #21252b;
+  --bg-hover:  #2c313a;
+  --border:    #3e4451;
+  --fg:        #abb2bf;
+  --muted:     #5c6370;
+  --accent:    #98c379;
+  --accent-2:  #61afef;
+  --accent-3:  #d19a66;
+  --danger:    #e06c75;
+  --warn:      #e5c07b;
+}
+
+html[data-theme="claude"] {
+  color-scheme: dark;
+  --bg:        #1e1e1e;
+  --bg-panel:  #252526;
+  --bg-hover:  #2d2d2d;
+  --border:    #3c3c3c;
+  --fg:        #d4d4d4;
+  --muted:     #808080;
+  --accent:    #d97706;
+  --accent-2:  #f59e0b;
+  --accent-3:  #c084fc;
+  --danger:    #ef4444;
+  --warn:      #fbbf24;
+}
+
+html[data-theme="github-dark"] {
+  color-scheme: dark;
+  --bg:        #0d1117;
+  --bg-panel:  #161b22;
+  --bg-hover:  #21262d;
+  --border:    #30363d;
+  --fg:        #e6edf3;
+  --muted:     #8b949e;
+  --accent:    #58a6ff;
+  --accent-2:  #3fb950;
+  --accent-3:  #d2a8ff;
+  --danger:    #f85149;
+  --warn:      #e3b341;
+}
+
+/* ── Light themes ────────────────────────────────────────── */
+
+/* Claude Light — 아이보리/오렌지 */
+html[data-theme="claude-light"] {
+  color-scheme: light;
+  --bg:        #faf9f6;
+  --bg-panel:  #f2ede4;
+  --bg-hover:  #e8e0d4;
+  --border:    #d9d0c3;
+  --fg:        #1c1917;
+  --muted:     #78716c;
+  --accent:    #d97706;
+  --accent-2:  #b45309;
+  --accent-3:  #c2410c;
+  --danger:    #dc2626;
+  --warn:      #d97706;
+}
+
+/* GitHub Light — 클린 개발자 라이트 */
+html[data-theme="github-light"] {
+  color-scheme: light;
+  --bg:        #ffffff;
+  --bg-panel:  #f6f8fa;
+  --bg-hover:  #eaeef2;
+  --border:    #d0d7de;
+  --fg:        #1f2328;
+  --muted:     #57606a;
+  --accent:    #0969da;
+  --accent-2:  #8250df;
+  --accent-3:  #1a7f37;
+  --danger:    #cf222e;
+  --warn:      #9a6700;
+}
+
+/* Solarized Light — 클래식 솔라라이즈드 */
+html[data-theme="solarized-light"] {
+  color-scheme: light;
+  --bg:        #fdf6e3;
+  --bg-panel:  #eee8d5;
+  --bg-hover:  #e5dfc9;
+  --border:    #d6d0bc;
+  --fg:        #073642;
+  --muted:     #657b83;
+  --accent:    #859900;
+  --accent-2:  #268bd2;
+  --accent-3:  #cb4b16;
+  --danger:    #dc322f;
+  --warn:      #b58900;
+}
+
+/* ── Tailwind theme mapping ──────────────────────────────── */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg:       var(--bg);
+  --color-panel:    var(--bg-panel);
+  --color-hover:    var(--bg-hover);
+  --color-border:   var(--border);
+  --color-fg:       var(--fg);
+  --color-muted:    var(--muted);
+  --color-accent:   var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-accent-3: var(--accent-3);
+  --color-danger:   var(--danger);
+  --color-warn:     var(--warn);
+  --font-mono:      "JetBrains Mono", ui-monospace, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ── Base styles ─────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100%;
+  background-color: var(--bg);
+  color: var(--fg);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
+
+/* 스크롤바 */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-panel); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* 선택 영역 */
+::selection { background: var(--accent); color: var(--bg); }

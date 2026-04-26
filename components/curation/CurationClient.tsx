@@ -34,21 +34,42 @@ const SORT_OPTIONS: { value: SortOrder; label: string }[] = [
 const SORT_ACTIVE_BG    = "#475569"; // slate-600
 const SORT_ACTIVE_COLOR = "#f1f5f9"; // slate-100
 
-async function fetchSingle(filter: FilterItem, order: SortOrder, maxResults = 20): Promise<YoutubeVideo[]> {
+async function fetchSingle(
+  filter: FilterItem,
+  order: SortOrder,
+  year: string,
+  month: string,
+  lang: string,
+  maxResults = 20
+): Promise<YoutubeVideo[]> {
   if (filter.kind === "all") return [];
   const param =
     filter.kind === "channel"
       ? `channelId=${encodeURIComponent(filter.channelId)}`
       : `keyword=${encodeURIComponent(filter.label)}`;
-  const res = await fetch(`/api/youtube?${param}&order=${order}&maxResults=${maxResults}`);
+  
+  const searchParams = new URLSearchParams(param);
+  searchParams.set("order", order);
+  searchParams.set("maxResults", maxResults.toString());
+  if (year) searchParams.set("year", year);
+  if (month) searchParams.set("month", month);
+  if (lang) searchParams.set("lang", lang);
+
+  const res = await fetch(`/api/youtube?${searchParams.toString()}`);
   if (!res.ok) return [];
   const data = await res.json();
   return data.videos ?? [];
 }
 
-async function fetchAll(filters: FilterItem[], order: SortOrder): Promise<YoutubeVideo[]> {
+async function fetchAll(
+  filters: FilterItem[],
+  order: SortOrder,
+  year: string,
+  month: string,
+  lang: string
+): Promise<YoutubeVideo[]> {
   const sub = filters.filter((f) => f.kind !== "all").slice(0, 5);
-  const results = await Promise.all(sub.map((f) => fetchSingle(f, order, 8)));
+  const results = await Promise.all(sub.map((f) => fetchSingle(f, order, year, month, lang, 8)));
 
   const seen = new Set<string>();
   const merged: YoutubeVideo[] = [];
@@ -166,9 +187,11 @@ const SkeletonGrid = () => (
 );
 
 export function CurationClient({ filters, userId }: { filters: FilterItem[]; userId: string }) {
-  // 다중선택: Set<number> (인덱스 집합)
   const [selectedIdxs, setSelectedIdxs] = useState<Set<number>>(new Set([0]));
   const [sort, setSort] = useState<SortOrder>("relevance");
+  const [year, setYear] = useState<string>("");
+  const [month, setMonth] = useState<string>("");
+  const [lang, setLang] = useState<string>("ko");
   const [videos, setVideos] = useState<YoutubeVideo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -191,7 +214,7 @@ export function CurationClient({ filters, userId }: { filters: FilterItem[]; use
   const isAll = selectedIdxs.size === 1 && selectedIdxs.has(0) && filters[0]?.kind === "all";
 
   const load = useCallback(
-    async (idxs: Set<number>, order: SortOrder) => {
+    async (idxs: Set<number>, order: SortOrder, y: string, m: string, l: string) => {
       if (idxs.size === 0) {
         setVideos([]);
         return;
@@ -201,7 +224,7 @@ export function CurationClient({ filters, userId }: { filters: FilterItem[]; use
       try {
         // all 버튼이 선택된 경우
         if (idxs.has(0) && filters[0]?.kind === "all") {
-          const result = await fetchAll(filters, order);
+          const result = await fetchAll(filters, order, y, m, l);
           setVideos(result);
           return;
         }
@@ -212,7 +235,7 @@ export function CurationClient({ filters, userId }: { filters: FilterItem[]; use
 
         const perMax = selectedFilters.length > 1 ? 8 : 20;
         const results = await Promise.all(
-          selectedFilters.map((f) => fetchSingle(f, order, perMax))
+          selectedFilters.map((f) => fetchSingle(f, order, y, m, l, perMax))
         );
         const seen = new Set<string>();
         const merged: YoutubeVideo[] = [];
@@ -252,7 +275,7 @@ export function CurationClient({ filters, userId }: { filters: FilterItem[]; use
         const newSet = new Set([0]);
         const nextSort = "date";
         setSort(nextSort);
-        load(newSet, nextSort);
+        load(newSet, nextSort, year, month, lang);
         return newSet;
       }
 
@@ -267,7 +290,7 @@ export function CurationClient({ filters, userId }: { filters: FilterItem[]; use
           next.add(0);
           const nextSort = "date";
           setSort(nextSort);
-          load(next, nextSort);
+          load(next, nextSort, year, month, lang);
           return next;
         }
       } else {
@@ -280,21 +303,41 @@ export function CurationClient({ filters, userId }: { filters: FilterItem[]; use
       );
       const nextSort = hasKeyword ? sort : (sort === "relevance" ? "date" : sort);
       if (!hasKeyword && sort === "relevance") setSort("date");
-      load(next, nextSort);
+      load(next, nextSort, year, month, lang);
       return next;
     });
   }
 
   function handleSortChange(order: SortOrder) {
     setSort(order);
-    load(selectedIdxs, order);
+    load(selectedIdxs, order, year, month, lang);
+  }
+
+  function handleYearChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const val = e.target.value;
+    setYear(val);
+    if (!val) setMonth("");
+    load(selectedIdxs, sort, val, val ? month : "", lang);
+  }
+
+  function handleMonthChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const val = e.target.value;
+    setMonth(val);
+    load(selectedIdxs, sort, year, val, lang);
+  }
+
+  function handleLangChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const val = e.target.value;
+    setLang(val);
+    load(selectedIdxs, sort, year, month, val);
   }
 
   useEffect(() => {
     const initSort = filters[0]?.kind === "all" ? "date" : "relevance";
     setSort(initSort);
-    load(new Set([0]), initSort);
-  }, [filters, load]);
+    // lang init "ko"
+    load(new Set([0]), initSort, year, month, lang);
+  }, [filters, load]); // year, month, lang are dependencies inside handle functions, not load directly to avoid loop here? Wait, load is stable because it doesn't have year/month as deps.
 
   // 결과 설명 텍스트 생성
   const selectedLabels = Array.from(selectedIdxs)
@@ -322,6 +365,49 @@ export function CurationClient({ filters, userId }: { filters: FilterItem[]; use
           <SortButtons current={sort} isAll={isAll} onChange={handleSortChange} />
         </div>
         <FilterChips filters={filters} selectedIdxs={selectedIdxs} onToggle={handleToggle} />
+        <div className="flex flex-wrap gap-2 pt-2 border-t mt-2" style={{ borderColor: "var(--border)" }}>
+          <select 
+            value={lang} 
+            onChange={handleLangChange}
+            className="px-2 py-1 text-xs rounded outline-none cursor-pointer"
+            style={{ background: "var(--bg)", color: "var(--fg)", border: "1px solid var(--border)" }}
+          >
+            <option value="ko">한국어</option>
+            <option value="en">영어</option>
+            <option value="all">전체 언어</option>
+          </select>
+
+          <select 
+            value={year} 
+            onChange={handleYearChange}
+            className="px-2 py-1 text-xs rounded outline-none cursor-pointer"
+            style={{ background: "var(--bg)", color: "var(--fg)", border: "1px solid var(--border)" }}
+          >
+            <option value="">연도 전체</option>
+            <option value="2026">2026년</option>
+            <option value="2025">2025년</option>
+            <option value="2024">2024년</option>
+            <option value="2023">2023년</option>
+            <option value="2022">2022년</option>
+            <option value="2021">2021년</option>
+          </select>
+
+          {year && (
+            <select 
+              value={month} 
+              onChange={handleMonthChange}
+              className="px-2 py-1 text-xs rounded outline-none cursor-pointer"
+              style={{ background: "var(--bg)", color: "var(--fg)", border: "1px solid var(--border)" }}
+            >
+              <option value="">월 전체</option>
+              {Array.from({ length: 12 }, (_, i) => (
+                <option key={i + 1} value={String(i + 1).padStart(2, "0")}>
+                  {i + 1}월
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
       </div>
 
       {/* 결과 */}

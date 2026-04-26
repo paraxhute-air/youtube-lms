@@ -16,6 +16,9 @@ export async function GET(request: Request) {
   const channelId = searchParams.get("channelId");
   const maxResults = searchParams.get("maxResults") ?? "20";
   const order = searchParams.get("order") ?? (channelId ? "date" : "relevance");
+  const year = searchParams.get("year");
+  const month = searchParams.get("month");
+  const lang = searchParams.get("lang") ?? "all"; // 'ko', 'en', 'all'
 
   if (!keyword && !channelId) {
     return NextResponse.json({ error: "keyword or channelId is required" }, { status: 400 });
@@ -38,9 +41,27 @@ export async function GET(request: Request) {
       searchUrl.searchParams.set("channelId", channelId);
     } else {
       searchUrl.searchParams.set("q", keyword!);
-      searchUrl.searchParams.set("relevanceLanguage", "ko");
+      if (lang === "ko" || lang === "en") {
+        searchUrl.searchParams.set("relevanceLanguage", lang);
+      } else {
+        searchUrl.searchParams.set("relevanceLanguage", "ko");
+      }
     }
     searchUrl.searchParams.set("order", order);
+
+    if (year) {
+      if (month) {
+        const y = parseInt(year);
+        const m = parseInt(month);
+        const startDate = new Date(y, m - 1, 1);
+        const endDate = new Date(y, m, 0, 23, 59, 59, 999);
+        searchUrl.searchParams.set("publishedAfter", startDate.toISOString());
+        searchUrl.searchParams.set("publishedBefore", endDate.toISOString());
+      } else {
+        searchUrl.searchParams.set("publishedAfter", `${year}-01-01T00:00:00Z`);
+        searchUrl.searchParams.set("publishedBefore", `${year}-12-31T23:59:59Z`);
+      }
+    }
 
     const searchRes = await fetch(searchUrl.toString(), { next: { revalidate: 3600 } });
     if (!searchRes.ok) throw new Error("YouTube search failed");
@@ -74,7 +95,7 @@ export async function GET(request: Request) {
       ]),
     );
 
-    const videos: YoutubeVideo[] = items.map((item: {
+    let finalVideos: YoutubeVideo[] = items.map((item: {
       id: { videoId: string };
       snippet: {
         title: string;
@@ -98,7 +119,16 @@ export async function GET(request: Request) {
       };
     });
 
-    return NextResponse.json({ videos });
+    if (lang === "ko") {
+      finalVideos = finalVideos.filter(v => /[가-힣]/.test(v.title));
+    } else if (lang === "en") {
+      finalVideos = finalVideos.filter(v => /[a-zA-Z]/.test(v.title) && !/[가-힣]/.test(v.title));
+    } else {
+      // "all" - only Korean or English (exclude videos that have neither)
+      finalVideos = finalVideos.filter(v => /[가-힣a-zA-Z]/.test(v.title));
+    }
+
+    return NextResponse.json({ videos: finalVideos });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: "Failed to fetch videos" }, { status: 500 });

@@ -105,9 +105,7 @@ export function YoutubePlayer({
                   return;
                 }
                 watchSecondsRef.current += 10;
-                if (Date.now() - lastSaveRef.current >= 10000) {
-                  await saveProgress();
-                }
+                await saveProgress();
               }, 10000);
             }
 

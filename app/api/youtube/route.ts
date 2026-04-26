@@ -19,6 +19,7 @@ export async function GET(request: Request) {
   const year = searchParams.get("year");
   const month = searchParams.get("month");
   const lang = searchParams.get("lang") ?? "all"; // 'ko', 'en', 'all'
+  const pageToken = searchParams.get("pageToken");
 
   if (!keyword && !channelId) {
     return NextResponse.json({ error: "keyword or channelId is required" }, { status: 400 });
@@ -48,6 +49,7 @@ export async function GET(request: Request) {
       }
     }
     searchUrl.searchParams.set("order", order);
+    if (pageToken) searchUrl.searchParams.set("pageToken", pageToken);
 
     if (year) {
       if (month) {
@@ -128,7 +130,7 @@ export async function GET(request: Request) {
       finalVideos = finalVideos.filter(v => /[가-힣a-zA-Z]/.test(v.title));
     }
 
-    return NextResponse.json({ videos: finalVideos });
+    return NextResponse.json({ videos: finalVideos, nextPageToken: searchData.nextPageToken ?? null });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: "Failed to fetch videos" }, { status: 500 });

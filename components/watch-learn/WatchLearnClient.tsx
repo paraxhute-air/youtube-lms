@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { VideoCard } from "./VideoCard";
 import type { YoutubeVideo } from "@/app/api/youtube/route";
 
+// ── wishlist helpers ──────────────────────────────────────────
 function loadWishlist(userId: string): Set<string> {
   try {
     const raw = localStorage.getItem(`wishlist_${userId}`);
@@ -12,11 +13,11 @@ function loadWishlist(userId: string): Set<string> {
     return new Set();
   }
 }
-
 function saveWishlist(userId: string, ids: Set<string>) {
   localStorage.setItem(`wishlist_${userId}`, JSON.stringify([...ids]));
 }
 
+// ── types ────────────────────────────────────────────────────
 export type FilterItem =
   | { kind: "all"; label: string }
   | { kind: "keyword"; label: string }
@@ -24,78 +25,51 @@ export type FilterItem =
 
 type SortOrder = "relevance" | "date" | "viewCount";
 
-const SORT_OPTIONS: { value: SortOrder; label: string }[] = [
-  { value: "relevance", label: "관련순" },
-  { value: "date",      label: "최신순" },
-  { value: "viewCount", label: "조회순" },
-];
+function filterKey(f: FilterItem): string {
+  if (f.kind === "channel") return `ch:${f.channelId}`;
+  return `kw:${f.label}`;
+}
 
-// slate-600 계열 색상 (테마 변수 없이 고정)
-const SORT_ACTIVE_BG    = "#475569"; // slate-600
-const SORT_ACTIVE_COLOR = "#f1f5f9"; // slate-100
-
+// ── fetch ─────────────────────────────────────────────────────
 async function fetchSingle(
   filter: FilterItem,
   order: SortOrder,
   year: string,
   month: string,
   lang: string,
-  maxResults = 20
-): Promise<YoutubeVideo[]> {
-  if (filter.kind === "all") return [];
-  const param =
+  maxResults = 20,
+  pageToken?: string,
+): Promise<{ videos: YoutubeVideo[]; nextPageToken: string | null }> {
+  if (filter.kind === "all") return { videos: [], nextPageToken: null };
+
+  const params = new URLSearchParams(
     filter.kind === "channel"
       ? `channelId=${encodeURIComponent(filter.channelId)}`
-      : `keyword=${encodeURIComponent(filter.label)}`;
-  
-  const searchParams = new URLSearchParams(param);
-  searchParams.set("order", order);
-  searchParams.set("maxResults", maxResults.toString());
-  if (year) searchParams.set("year", year);
-  if (month) searchParams.set("month", month);
-  if (lang) searchParams.set("lang", lang);
+      : `keyword=${encodeURIComponent(filter.label)}`,
+  );
+  params.set("order", order);
+  params.set("maxResults", String(maxResults));
+  if (year)      params.set("year", year);
+  if (month)     params.set("month", month);
+  if (lang)      params.set("lang", lang);
+  if (pageToken) params.set("pageToken", pageToken);
 
-  const res = await fetch(`/api/youtube?${searchParams.toString()}`);
-  if (!res.ok) return [];
+  const res = await fetch(`/api/youtube?${params}`);
+  if (!res.ok) return { videos: [], nextPageToken: null };
   const data = await res.json();
-  return data.videos ?? [];
+  return { videos: data.videos ?? [], nextPageToken: data.nextPageToken ?? null };
 }
 
-async function fetchAll(
-  filters: FilterItem[],
-  order: SortOrder,
-  year: string,
-  month: string,
-  lang: string
-): Promise<YoutubeVideo[]> {
-  const sub = filters.filter((f) => f.kind !== "all").slice(0, 5);
-  const results = await Promise.all(sub.map((f) => fetchSingle(f, order, year, month, lang, 8)));
+// ── sort options ──────────────────────────────────────────────
+const SORT_OPTIONS: { value: SortOrder; label: string }[] = [
+  { value: "relevance", label: "관련순" },
+  { value: "date",      label: "최신순" },
+  { value: "viewCount", label: "조회순" },
+];
+const SORT_ACTIVE_BG    = "#475569";
+const SORT_ACTIVE_COLOR = "#f1f5f9";
 
-  const seen = new Set<string>();
-  const merged: YoutubeVideo[] = [];
-  for (const list of results) {
-    for (const v of list) {
-      if (!seen.has(v.id)) {
-        seen.add(v.id);
-        merged.push(v);
-      }
-    }
-  }
-
-  if (order === "viewCount") {
-    merged.sort((a, b) => parseInt(b.viewCount) - parseInt(a.viewCount));
-  } else if (order === "date") {
-    merged.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
-  }
-
-  return merged;
-}
-
-/**
- * 다중선택 지원 FilterChips
- * - "all" 버튼: 단독 선택, 클릭 시 나머지 모두 해제
- * - keyword/channel 버튼: 다중선택 가능, 하나라도 선택되면 "all" 해제
- */
+// ── sub-components ────────────────────────────────────────────
 function FilterChips({
   filters,
   selectedIdxs,
@@ -147,7 +121,6 @@ function SortButtons({
   const options = isAll
     ? SORT_OPTIONS.filter((o) => o.value !== "relevance")
     : SORT_OPTIONS;
-
   return (
     <div className="flex gap-1">
       {options.map((o) => (
@@ -186,26 +159,63 @@ const SkeletonGrid = () => (
   </div>
 );
 
+const SkeletonRow = () => (
+  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+    {Array.from({ length: 4 }).map((_, i) => (
+      <div
+        key={i}
+        className="rounded-lg overflow-hidden animate-pulse"
+        style={{ background: "var(--bg-panel)", border: "1px solid var(--border)" }}
+      >
+        <div className="w-full aspect-video bg-[var(--bg-hover)]" />
+        <div className="p-3 space-y-2">
+          <div className="h-3 rounded bg-[var(--bg-hover)] w-full" />
+          <div className="h-3 rounded bg-[var(--bg-hover)] w-2/3" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+// ── main component ────────────────────────────────────────────
 export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; userId: string }) {
   const [selectedIdxs, setSelectedIdxs] = useState<Set<number>>(new Set([0]));
-  const [sort, setSort] = useState<SortOrder>("relevance");
-  const [year, setYear] = useState<string>("");
-  const [month, setMonth] = useState<string>("");
-  const [lang, setLang] = useState<string>("ko");
-  const [videos, setVideos] = useState<YoutubeVideo[]>([]);
+  const [sort, setSort]   = useState<SortOrder>("relevance");
+  const [year, setYear]   = useState("");
+  const [month, setMonth] = useState("");
+  const [lang, setLang]   = useState("ko");
+  const [videos, setVideos]   = useState<YoutubeVideo[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [error, setError]     = useState<string | null>(null);
   const [wishlistedIds, setWishlistedIds] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    setWishlistedIds(loadWishlist(userId));
-  }, [userId]);
+  // mutable refs — read by IntersectionObserver without stale closures
+  const pageTokensRef   = useRef<Map<string, string | null>>(new Map());
+  const seenIdsRef      = useRef<Set<string>>(new Set());
+  const reqIdRef        = useRef(0);
+  const loadingRef      = useRef(false);
+  const hasMoreRef      = useRef(false);
+  const selectedIdxsRef = useRef(selectedIdxs);
+  const sortRef         = useRef(sort);
+  const yearRef         = useRef(year);
+  const monthRef        = useRef(month);
+  const langRef         = useRef(lang);
+  const loaderRef       = useRef<HTMLDivElement>(null);
+
+  // sync state → refs (for handler-mutated values)
+  useEffect(() => { selectedIdxsRef.current = selectedIdxs; }, [selectedIdxs]);
+  useEffect(() => { sortRef.current  = sort;  }, [sort]);
+  useEffect(() => { yearRef.current  = year;  }, [year]);
+  useEffect(() => { monthRef.current = month; }, [month]);
+  useEffect(() => { langRef.current  = lang;  }, [lang]);
+
+  useEffect(() => { setWishlistedIds(loadWishlist(userId)); }, [userId]);
 
   function toggleWishlist(videoId: string) {
     setWishlistedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(videoId)) next.delete(videoId);
-      else next.add(videoId);
+      next.has(videoId) ? next.delete(videoId) : next.add(videoId);
       saveWishlist(userId, next);
       return next;
     });
@@ -213,133 +223,207 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
 
   const isAll = selectedIdxs.size === 1 && selectedIdxs.has(0) && filters[0]?.kind === "all";
 
-  const load = useCallback(
-    async (idxs: Set<number>, order: SortOrder, y: string, m: string, l: string) => {
-      if (idxs.size === 0) {
+  const load = useCallback(async (
+    idxs: Set<number>,
+    order: SortOrder,
+    y: string, m: string, l: string,
+    append: boolean,
+  ) => {
+    if (idxs.size === 0) {
+      setVideos([]);
+      setHasMore(false);
+      hasMoreRef.current = false;
+      return;
+    }
+
+    // reset pagination state on fresh load
+    if (!append) {
+      pageTokensRef.current = new Map();
+      seenIdsRef.current    = new Set();
+    }
+
+    const myId = ++reqIdRef.current;
+    loadingRef.current = true;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const isAllMode = idxs.has(0) && filters[0]?.kind === "all";
+      const subFilters: FilterItem[] = isAllMode
+        ? filters.filter((f) => f.kind !== "all").slice(0, 5)
+        : (Array.from(idxs).map((i) => filters[i]).filter((f): f is FilterItem => !!f && f.kind !== "all"));
+
+      if (subFilters.length === 0) {
         setVideos([]);
+        setHasMore(false);
+        hasMoreRef.current = false;
         return;
       }
-      setLoading(true);
-      setError(null);
-      try {
-        // all 버튼이 선택된 경우
-        if (idxs.has(0) && filters[0]?.kind === "all") {
-          const result = await fetchAll(filters, order, y, m, l);
-          setVideos(result);
-          return;
-        }
-        // 다중 선택된 필터들을 병렬 fetch
-        const selectedFilters = Array.from(idxs)
-          .map((i) => filters[i])
-          .filter((f): f is FilterItem => !!f && f.kind !== "all");
 
-        const perMax = selectedFilters.length > 1 ? 8 : 20;
-        const results = await Promise.all(
-          selectedFilters.map((f) => fetchSingle(f, order, y, m, l, perMax))
-        );
-        const seen = new Set<string>();
-        const merged: YoutubeVideo[] = [];
-        for (const list of results) {
-          for (const v of list) {
-            if (!seen.has(v.id)) {
-              seen.add(v.id);
-              merged.push(v);
-            }
+      const perMax = isAllMode ? 20 : (subFilters.length > 1 ? 10 : 20);
+
+      // on append, only fetch filters that still have a token
+      const toFetch = append
+        ? subFilters.filter((f) => pageTokensRef.current.get(filterKey(f)) !== null)
+        : subFilters;
+
+      if (append && toFetch.length === 0) {
+        const newHasMore = false;
+        hasMoreRef.current = newHasMore;
+        setHasMore(newHasMore);
+        return;
+      }
+
+      const results = await Promise.all(
+        toFetch.map((f) =>
+          fetchSingle(
+            f, order, y, m, l, perMax,
+            append ? (pageTokensRef.current.get(filterKey(f)) ?? undefined) : undefined,
+          ),
+        ),
+      );
+
+      // stale request guard
+      if (myId !== reqIdRef.current) return;
+
+      // update page tokens
+      const newTokens = new Map(pageTokensRef.current);
+      if (!append) {
+        // initialize all subFilters to null; actual values set below
+        subFilters.forEach((f) => newTokens.set(filterKey(f), null));
+      }
+      toFetch.forEach((f, i) => newTokens.set(filterKey(f), results[i].nextPageToken));
+      pageTokensRef.current = newTokens;
+
+      // dedup merge
+      const seen = seenIdsRef.current;
+      const merged: YoutubeVideo[] = [];
+      for (const r of results) {
+        for (const v of r.videos) {
+          if (!seen.has(v.id)) {
+            seen.add(v.id);
+            merged.push(v);
           }
         }
-        if (order === "viewCount") {
-          merged.sort((a, b) => parseInt(b.viewCount) - parseInt(a.viewCount));
-        } else if (order === "date") {
-          merged.sort(
-            (a, b) =>
-              new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
-          );
-        }
-        setVideos(merged);
-      } catch {
+      }
+      seenIdsRef.current = seen;
+
+      if (order === "viewCount") {
+        merged.sort((a, b) => parseInt(b.viewCount) - parseInt(a.viewCount));
+      } else if (order === "date") {
+        merged.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+      }
+
+      setVideos((prev) => append ? [...prev, ...merged] : merged);
+
+      const newHasMore = [...newTokens.values()].some((t) => t !== null);
+      hasMoreRef.current = newHasMore;
+      setHasMore(newHasMore);
+    } catch {
+      if (myId === reqIdRef.current) {
         setError("영상을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
-      } finally {
+      }
+    } finally {
+      if (myId === reqIdRef.current) {
+        loadingRef.current = false;
         setLoading(false);
       }
-    },
-    [filters],
-  );
+    }
+  }, [filters]);
 
+  // IntersectionObserver — triggers append load when sentinel enters viewport
+  useEffect(() => {
+    const el = loaderRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loadingRef.current && hasMoreRef.current) {
+          load(
+            selectedIdxsRef.current,
+            sortRef.current,
+            yearRef.current,
+            monthRef.current,
+            langRef.current,
+            true,
+          );
+        }
+      },
+      { rootMargin: "300px" },
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [load]);
+
+  // ── event handlers ──────────────────────────────────────────
   function handleToggle(idx: number) {
     setSelectedIdxs((prev) => {
-      const next = new Set(prev);
-      const clickedKind = filters[idx]?.kind;
+      const next   = new Set(prev);
+      const kind   = filters[idx]?.kind;
 
-      // "all" 클릭: 단독 선택
-      if (clickedKind === "all") {
-        const newSet = new Set([0]);
-        const nextSort = "date";
+      if (kind === "all") {
+        const newSet   = new Set([0]);
+        const nextSort: SortOrder = "date";
         setSort(nextSort);
-        load(newSet, nextSort, year, month, lang);
+        load(newSet, nextSort, year, month, lang, false);
         return newSet;
       }
 
-      // keyword/channel 클릭: 다중선택
-      // "all"(idx=0)이 선택되어 있으면 제거
       next.delete(0);
-
       if (next.has(idx)) {
         next.delete(idx);
-        // 아무것도 선택 안 되면 "all"로 복귀
         if (next.size === 0) {
           next.add(0);
-          const nextSort = "date";
+          const nextSort: SortOrder = "date";
           setSort(nextSort);
-          load(next, nextSort, year, month, lang);
+          load(next, nextSort, year, month, lang, false);
           return next;
         }
       } else {
         next.add(idx);
       }
 
-      // 정렬: keyword가 하나라도 있으면 relevance 허용
-      const hasKeyword = Array.from(next).some(
-        (i) => filters[i]?.kind === "keyword"
-      );
-      const nextSort = hasKeyword ? sort : (sort === "relevance" ? "date" : sort);
+      const hasKeyword = Array.from(next).some((i) => filters[i]?.kind === "keyword");
+      const nextSort   = hasKeyword ? sort : (sort === "relevance" ? "date" : sort);
       if (!hasKeyword && sort === "relevance") setSort("date");
-      load(next, nextSort, year, month, lang);
+      load(next, nextSort, year, month, lang, false);
       return next;
     });
   }
 
   function handleSortChange(order: SortOrder) {
     setSort(order);
-    load(selectedIdxs, order, year, month, lang);
+    load(selectedIdxs, order, year, month, lang, false);
   }
 
   function handleYearChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const val = e.target.value;
     setYear(val);
     if (!val) setMonth("");
-    load(selectedIdxs, sort, val, val ? month : "", lang);
+    load(selectedIdxs, sort, val, val ? month : "", lang, false);
   }
 
   function handleMonthChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const val = e.target.value;
     setMonth(val);
-    load(selectedIdxs, sort, year, val, lang);
+    load(selectedIdxs, sort, year, val, lang, false);
   }
 
   function handleLangChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const val = e.target.value;
     setLang(val);
-    load(selectedIdxs, sort, year, month, val);
+    load(selectedIdxs, sort, year, month, val, false);
   }
 
+  // initial load
   useEffect(() => {
-    const initSort = filters[0]?.kind === "all" ? "date" : "relevance";
+    const initSort: SortOrder = filters[0]?.kind === "all" ? "date" : "relevance";
     setSort(initSort);
-    // lang init "ko"
-    load(new Set([0]), initSort, year, month, lang);
-  }, [filters, load]); // year, month, lang are dependencies inside handle functions, not load directly to avoid loop here? Wait, load is stable because it doesn't have year/month as deps.
+    load(new Set([0]), initSort, "", "", "ko", false);
+  }, [filters, load]);
 
-  // 결과 설명 텍스트 생성
+  // ── render ──────────────────────────────────────────────────
   const selectedLabels = Array.from(selectedIdxs)
     .map((i) => filters[i])
     .filter((f): f is FilterItem => !!f && f.kind !== "all")
@@ -347,7 +431,7 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
 
   return (
     <div className="space-y-4">
-      {/* 필터 + 정렬 */}
+      {/* filter + sort panel */}
       <div
         className="p-4 rounded-lg space-y-3"
         style={{ background: "var(--bg-panel)", border: "1px solid var(--border)" }}
@@ -364,10 +448,15 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
           </div>
           <SortButtons current={sort} isAll={isAll} onChange={handleSortChange} />
         </div>
+
         <FilterChips filters={filters} selectedIdxs={selectedIdxs} onToggle={handleToggle} />
-        <div className="flex flex-wrap gap-2 pt-2 border-t mt-2" style={{ borderColor: "var(--border)" }}>
-          <select 
-            value={lang} 
+
+        <div
+          className="flex flex-wrap gap-2 pt-2 border-t mt-2"
+          style={{ borderColor: "var(--border)" }}
+        >
+          <select
+            value={lang}
             onChange={handleLangChange}
             className="px-2 py-1 text-xs rounded outline-none cursor-pointer"
             style={{ background: "var(--bg)", color: "var(--fg)", border: "1px solid var(--border)" }}
@@ -377,8 +466,8 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
             <option value="all">전체 언어</option>
           </select>
 
-          <select 
-            value={year} 
+          <select
+            value={year}
             onChange={handleYearChange}
             className="px-2 py-1 text-xs rounded outline-none cursor-pointer"
             style={{ background: "var(--bg)", color: "var(--fg)", border: "1px solid var(--border)" }}
@@ -393,8 +482,8 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
           </select>
 
           {year && (
-            <select 
-              value={month} 
+            <select
+              value={month}
               onChange={handleMonthChange}
               className="px-2 py-1 text-xs rounded outline-none cursor-pointer"
               style={{ background: "var(--bg)", color: "var(--fg)", border: "1px solid var(--border)" }}
@@ -410,36 +499,62 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
         </div>
       </div>
 
-      {/* 결과 */}
-      {loading ? (
+      {/* result count */}
+      {!loading && videos.length > 0 && (
+        <p className="text-[var(--muted)] text-xs">
+          <span style={{ color: "var(--accent-2)" }}>{videos.length}</span>개 결과
+          {selectedLabels.length > 0 && (
+            <> · {selectedLabels.map((l) => `"${l}"`).join(", ")}</>
+          )}
+        </p>
+      )}
+
+      {/* video grid */}
+      {loading && videos.length === 0 ? (
         <SkeletonGrid />
       ) : error ? (
         <div
           className="px-4 py-3 rounded text-sm"
-          style={{ background: "var(--danger)22", border: "1px solid var(--danger)44", color: "var(--danger)" }}
+          style={{
+            background: "var(--danger)22",
+            border: "1px solid var(--danger)44",
+            color: "var(--danger)",
+          }}
         >
           ✗ {error}
         </div>
+      ) : videos.length === 0 ? (
+        <div
+          className="rounded-lg p-8 text-center"
+          style={{ background: "var(--bg-panel)", border: "1px solid var(--border)" }}
+        >
+          <p className="text-[var(--muted)] text-sm">결과가 없습니다</p>
+        </div>
       ) : (
-        <>
-          <p className="text-[var(--muted)] text-xs">
-            <span style={{ color: "var(--accent-2)" }}>{videos.length}</span>개 결과
-            {selectedLabels.length > 0 && (
-              <> · {selectedLabels.map((l) => `"${l}"`).join(", ")}</>
-            )}
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {videos.map((v) => (
-              <VideoCard
-                key={v.id}
-                video={v}
-                wishlisted={wishlistedIds.has(v.id)}
-                onToggleWishlist={() => toggleWishlist(v.id)}
-              />
-            ))}
-          </div>
-        </>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {videos.map((v) => (
+            <VideoCard
+              key={v.id}
+              video={v}
+              wishlisted={wishlistedIds.has(v.id)}
+              onToggleWishlist={() => toggleWishlist(v.id)}
+            />
+          ))}
+        </div>
       )}
+
+      {/* append skeleton */}
+      {loading && videos.length > 0 && <SkeletonRow />}
+
+      {/* end of results */}
+      {!loading && !hasMore && videos.length > 0 && (
+        <p className="text-center text-xs py-4" style={{ color: "var(--muted)" }}>
+          — 끝 —
+        </p>
+      )}
+
+      {/* IntersectionObserver sentinel — always mounted */}
+      <div ref={loaderRef} className="h-1" />
     </div>
   );
 }

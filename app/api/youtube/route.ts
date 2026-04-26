@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const keyword = searchParams.get("keyword");
   const channelId = searchParams.get("channelId");
-  const maxResults = searchParams.get("maxResults") ?? "20";
+  const maxResults = searchParams.get("maxResults") ?? "50";
   const order = searchParams.get("order") ?? (channelId ? "date" : "relevance");
   const year = searchParams.get("year");
   const month = searchParams.get("month");
@@ -44,9 +44,8 @@ export async function GET(request: Request) {
       searchUrl.searchParams.set("q", keyword!);
       if (lang === "ko" || lang === "en") {
         searchUrl.searchParams.set("relevanceLanguage", lang);
-      } else {
-        searchUrl.searchParams.set("relevanceLanguage", "ko");
       }
+      // lang=all: relevanceLanguage 미설정 — 전체 언어 결과 반환
     }
     searchUrl.searchParams.set("order", order);
     if (pageToken) searchUrl.searchParams.set("pageToken", pageToken);
@@ -121,13 +120,11 @@ export async function GET(request: Request) {
       };
     });
 
+    const hasKo = (s: string) => /[가-힣]/.test(s);
     if (lang === "ko") {
-      finalVideos = finalVideos.filter(v => /[가-힣]/.test(v.title));
+      finalVideos = finalVideos.filter(v => hasKo(v.channelTitle) && hasKo(v.title));
     } else if (lang === "en") {
-      finalVideos = finalVideos.filter(v => /[a-zA-Z]/.test(v.title) && !/[가-힣]/.test(v.title));
-    } else {
-      // "all" - only Korean or English (exclude videos that have neither)
-      finalVideos = finalVideos.filter(v => /[가-힣a-zA-Z]/.test(v.title));
+      finalVideos = finalVideos.filter(v => /[a-zA-Z]/.test(v.title) && !hasKo(v.title));
     }
 
     return NextResponse.json(

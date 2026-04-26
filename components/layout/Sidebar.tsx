@@ -4,13 +4,30 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ThemeSwitcher } from "@/components/ui/ThemeSwitcher";
 
-const NAV_ITEMS = [
-  { href: "/dashboard", label: "dashboard", icon: "▸" },
-  { href: "/curation", label: "curation",  icon: "▸" },
-];
-
 export function Sidebar({ displayName }: { displayName: string }) {
   const pathname = usePathname();
+
+  const navLink = (href: string, label: string) => {
+    const active = pathname === href || (href !== "/" && pathname.startsWith(href));
+    return (
+      <Link
+        key={href}
+        href={href}
+        className="flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors"
+        style={{
+          background: active ? "var(--bg-hover)" : "transparent",
+          color: active ? "var(--accent)" : "var(--muted)",
+        }}
+      >
+        <span style={{ color: active ? "var(--accent)" : "var(--border)" }}>▸</span>
+        {label}
+      </Link>
+    );
+  };
+
+  const divider = (
+    <div className="my-2" style={{ borderTop: "1px solid var(--border)" }} />
+  );
 
   return (
     <aside
@@ -24,32 +41,20 @@ export function Sidebar({ displayName }: { displayName: string }) {
       </div>
 
       {/* 네비게이션 */}
-      <nav className="flex-1 space-y-1">
-        {NAV_ITEMS.map((item) => {
-          const active = pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors"
-              style={{
-                background: active ? "var(--bg-hover)" : "transparent",
-                color: active ? "var(--accent)" : "var(--muted)",
-              }}
-            >
-              <span className={active ? "text-[var(--accent)]" : "text-[var(--border)]"}>
-                {item.icon}
-              </span>
-              {item.label}
-            </Link>
-          );
-        })}
+      <nav className="flex-1">
+        {navLink("/watch-learn", "watch & learn")}
 
-        <div
-          className="mt-2 pt-3 space-y-1"
-          style={{ borderTop: "1px solid var(--border)" }}
-        >
-          <p className="px-3 text-xs" style={{ color: "var(--muted)" }}>settings</p>
+        {divider}
+
+        {navLink("/ai-events", "ai events")}
+        {navLink("/ai-learning", "ai learning")}
+
+        {divider}
+
+        {navLink("/dashboard", "dashboard")}
+
+        <div className="mt-1 space-y-1">
+          <p className="px-3 text-xs" style={{ color: "var(--muted)" }}>setting</p>
           {[
             { href: "/settings/keywords", label: "keywords" },
             { href: "/settings/channels", label: "channels" },

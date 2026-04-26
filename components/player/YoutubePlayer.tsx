@@ -9,6 +9,7 @@ interface Props {
   initialPosition: number;
   initialStatus: "todo" | "doing" | "done";
   initialWatchSeconds: number;
+  koreanSubtitles?: boolean;
 }
 
 // YT IFrame API를 any로 타입 처리 (UMD 글로벌 제약 회피)
@@ -29,6 +30,7 @@ export function YoutubePlayer({
   initialPosition,
   initialStatus,
   initialWatchSeconds,
+  koreanSubtitles = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer>(null);
@@ -84,6 +86,7 @@ export function YoutubePlayer({
           start: Math.floor(initialPosition),
           rel: 0,
           modestbranding: 1,
+          ...(koreanSubtitles ? { cc_load_policy: 1, cc_lang_pref: "ko" } : {}),
         },
         events: {
           onReady: () => {

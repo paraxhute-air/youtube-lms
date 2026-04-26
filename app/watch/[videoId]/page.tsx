@@ -6,10 +6,13 @@ import type { VideoStatus } from "@/lib/types/database";
 
 export default async function WatchPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ videoId: string }>;
+  searchParams: Promise<{ cc?: string }>;
 }) {
   const { videoId } = await params;
+  const { cc } = await searchParams;
   const supabase = await createClient();
 
   const {
@@ -93,6 +96,7 @@ export default async function WatchPage({
           initialPosition={initialPosition}
           initialStatus={initialStatus}
           initialWatchSeconds={log?.watch_seconds ?? 0}
+          koreanSubtitles={cc === "ko"}
         />
 
         {/* 안내 */}

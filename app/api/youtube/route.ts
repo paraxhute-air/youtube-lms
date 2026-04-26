@@ -123,13 +123,6 @@ export async function GET(request: Request) {
       };
     });
 
-    const hasKo = (s: string) => /[가-힣]/.test(s);
-    if (lang === "ko") {
-      finalVideos = finalVideos.filter(v => hasKo(v.title));
-    } else if (lang === "en") {
-      finalVideos = finalVideos.filter(v => /[a-zA-Z]/.test(v.title) && !hasKo(v.title));
-    }
-
     return NextResponse.json(
       { videos: finalVideos, nextPageToken: searchData.nextPageToken ?? null },
       { headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" } },

@@ -43,16 +43,18 @@ interface Props {
   video: YoutubeVideo;
   wishlisted?: boolean;
   onToggleWishlist?: () => void;
+  subtitlesEnabled?: boolean;
 }
 
-export function VideoCard({ video, wishlisted = false, onToggleWishlist }: Props) {
+export function VideoCard({ video, wishlisted = false, onToggleWishlist, subtitlesEnabled = false }: Props) {
+  const watchHref = subtitlesEnabled ? `/watch/${video.id}?cc=ko` : `/watch/${video.id}`;
   return (
     <div
       className="group flex flex-col rounded-lg overflow-hidden"
       style={{ background: "var(--bg-panel)", border: "1px solid var(--border)" }}
     >
       {/* 썸네일 + 제목 — 클릭 시 플레이어로 이동 */}
-      <Link href={`/watch/${video.id}`} className="flex flex-col flex-1">
+      <Link href={watchHref} className="flex flex-col flex-1">
         <div className="relative overflow-hidden aspect-video">
           <Image
             src={video.thumbnail}

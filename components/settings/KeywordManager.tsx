@@ -22,6 +22,7 @@ export function KeywordManager({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
 
   function handleAdd() {
     const kw = newKw.trim();
@@ -58,15 +59,18 @@ export function KeywordManager({
     });
   }
 
-  function handleMove(idx: number, dir: -1 | 1) {
+  function handleDrop(targetIdx: number) {
+    if (dragIdx === null || dragIdx === targetIdx) {
+      setDragIdx(null);
+      return;
+    }
     const next = [...keywords];
-    const target = idx + dir;
-    if (target < 0 || target >= next.length) return;
-    [next[idx], next[target]] = [next[target], next[idx]];
+    const [removed] = next.splice(dragIdx, 1);
+    next.splice(targetIdx, 0, removed);
     setKeywords(next);
+    setDragIdx(null);
     startTransition(async () => {
-      await reorderKeyword(next[idx].id, idx * 10 + dir * 10);
-      await reorderKeyword(next[target].id, target * 10);
+      await Promise.all(next.map((k, i) => reorderKeyword(k.id, i * 10)));
     });
   }
 
@@ -140,41 +144,29 @@ export function KeywordManager({
           keywords.map((kw, idx) => (
             <div
               key={kw.id}
+              draggable
+              onDragStart={() => setDragIdx(idx)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => handleDrop(idx)}
+              onDragEnd={() => setDragIdx(null)}
               className="flex items-center gap-3 px-4 py-3"
               style={{
                 background: idx % 2 === 0 ? "var(--bg)" : "var(--bg-panel)",
-                borderBottom:
-                  idx < keywords.length - 1
-                    ? "1px solid var(--border)"
-                    : "none",
-                opacity: kw.is_active ? 1 : 0.5,
+                borderBottom: idx < keywords.length - 1 ? "1px solid var(--border)" : "none",
+                opacity: dragIdx === idx ? 0.4 : (kw.is_active ? 1 : 0.5),
+                cursor: "grab",
               }}
             >
-              {/* 순서 조정 */}
-              <div className="flex flex-col gap-0.5">
-                <button
-                  onClick={() => handleMove(idx, -1)}
-                  disabled={idx === 0 || isPending}
-                  className="text-xs leading-none disabled:opacity-20 hover:text-[var(--accent)] transition-colors"
-                  style={{ color: "var(--muted)" }}
-                >
-                  ▴
-                </button>
-                <button
-                  onClick={() => handleMove(idx, 1)}
-                  disabled={idx === keywords.length - 1 || isPending}
-                  className="text-xs leading-none disabled:opacity-20 hover:text-[var(--accent)] transition-colors"
-                  style={{ color: "var(--muted)" }}
-                >
-                  ▾
-                </button>
-              </div>
+              {/* 드래그 핸들 */}
+              <span
+                className="text-sm select-none shrink-0"
+                style={{ color: "var(--border)", cursor: "grab" }}
+              >
+                ⠿
+              </span>
 
               {/* 키워드 */}
-              <span
-                className="flex-1 text-sm"
-                style={{ color: "var(--fg)" }}
-              >
+              <span className="flex-1 text-sm" style={{ color: "var(--fg)" }}>
                 {kw.keyword}
               </span>
 

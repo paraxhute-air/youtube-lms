@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { VideoCard } from "./VideoCard";
 import type { YoutubeVideo } from "@/app/api/youtube/route";
+
+const hasKo = (s: string) => /[가-힣]/.test(s);
+const isKoreanVideo = (v: { title: string; channelTitle: string }) =>
+  hasKo(v.title) || hasKo(v.channelTitle);
 
 // ── wishlist helpers ──────────────────────────────────────────
 function loadWishlist(userId: string): Set<string> {
@@ -51,7 +55,8 @@ async function fetchSingle(
   params.set("maxResults", String(maxResults));
   if (year)      params.set("year", year);
   if (month)     params.set("month", month);
-  if (lang)      params.set("lang", lang);
+  const apiLang = lang === "global" ? "en" : lang;
+  if (apiLang)   params.set("lang", apiLang);
   if (pageToken) params.set("pageToken", pageToken);
 
   const res = await fetch(`/api/youtube?${params}`);
@@ -177,7 +182,7 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
   const [sort, setSort]   = useState<SortOrder>("date");
   const [year, setYear]   = useState("");
   const [month, setMonth] = useState("");
-  const [lang, setLang]   = useState("ko");
+  const [lang, setLang]   = useState<"all" | "ko" | "global">("all");
   const [videos, setVideos]   = useState<YoutubeVideo[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -205,6 +210,12 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
   useEffect(() => { langRef.current  = lang;  }, [lang]);
 
   useEffect(() => { setWishlistedIds(loadWishlist(userId)); }, [userId]);
+
+  const displayedVideos = useMemo(() => {
+    if (lang === "ko") return videos.filter(isKoreanVideo);
+    if (lang === "global") return videos.filter(v => !isKoreanVideo(v));
+    return videos;
+  }, [videos, lang]);
 
   function toggleWishlist(videoId: string) {
     setWishlistedIds((prev) => {
@@ -407,7 +418,7 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
 
   // initial load
   useEffect(() => {
-    load(new Set([0]), "date", "", "", "ko", false);
+    load(new Set([0]), "date", "", "", "all", false);
   }, [filters, load]);
 
   // ── render ──────────────────────────────────────────────────
@@ -448,9 +459,9 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
             className="px-2 py-1 text-xs rounded outline-none cursor-pointer"
             style={{ background: "var(--bg)", color: "var(--fg)", border: "1px solid var(--border)" }}
           >
-            <option value="ko">한국어</option>
-            <option value="en">영어</option>
-            <option value="all">전체 언어</option>
+            <option value="all">모두보기</option>
+            <option value="ko">한국</option>
+            <option value="global">글로벌</option>
           </select>
 
           <select
@@ -487,9 +498,9 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
       </div>
 
       {/* result count */}
-      {!loading && videos.length > 0 && (
+      {!loading && displayedVideos.length > 0 && (
         <p className="text-[var(--muted)] text-xs">
-          <span style={{ color: "var(--accent-2)" }}>{videos.length}</span>개 결과
+          <span style={{ color: "var(--accent-2)" }}>{displayedVideos.length}</span>개 결과
           {selectedLabels.length > 0 && (
             <> · {selectedLabels.map((l) => `"${l}"`).join(", ")}</>
           )}
@@ -510,21 +521,24 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
         >
           ✗ {error}
         </div>
-      ) : videos.length === 0 ? (
+      ) : displayedVideos.length === 0 ? (
         <div
           className="rounded-lg p-8 text-center"
           style={{ background: "var(--bg-panel)", border: "1px solid var(--border)" }}
         >
-          <p className="text-[var(--muted)] text-sm">결과가 없습니다</p>
+          <p className="text-[var(--muted)] text-sm">
+            {videos.length > 0 ? "이 필터에 맞는 영상이 없습니다" : "결과가 없습니다"}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {videos.map((v) => (
+          {displayedVideos.map((v) => (
             <VideoCard
               key={v.id}
               video={v}
               wishlisted={wishlistedIds.has(v.id)}
               onToggleWishlist={() => toggleWishlist(v.id)}
+              subtitlesEnabled={!isKoreanVideo(v)}
             />
           ))}
         </div>

@@ -18,6 +18,7 @@ export function ChannelManager({ initialChannels }: { initialChannels: Channel[]
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
 
   function handleAdd() {
     const url = newUrl.trim();
@@ -50,15 +51,18 @@ export function ChannelManager({ initialChannels }: { initialChannels: Channel[]
     });
   }
 
-  function handleMove(idx: number, dir: -1 | 1) {
+  function handleDrop(targetIdx: number) {
+    if (dragIdx === null || dragIdx === targetIdx) {
+      setDragIdx(null);
+      return;
+    }
     const next = [...channels];
-    const target = idx + dir;
-    if (target < 0 || target >= next.length) return;
-    [next[idx], next[target]] = [next[target], next[idx]];
+    const [removed] = next.splice(dragIdx, 1);
+    next.splice(targetIdx, 0, removed);
     setChannels(next);
+    setDragIdx(null);
     startTransition(async () => {
-      await reorderChannel(next[idx].id, idx * 10 + dir * 10);
-      await reorderChannel(next[target].id, target * 10);
+      await Promise.all(next.map((c, i) => reorderChannel(c.id, i * 10)));
     });
   }
 
@@ -132,32 +136,26 @@ export function ChannelManager({ initialChannels }: { initialChannels: Channel[]
           channels.map((ch, idx) => (
             <div
               key={ch.id}
+              draggable
+              onDragStart={() => setDragIdx(idx)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => handleDrop(idx)}
+              onDragEnd={() => setDragIdx(null)}
               className="flex items-center gap-3 px-4 py-3"
               style={{
                 background: idx % 2 === 0 ? "var(--bg)" : "var(--bg-panel)",
                 borderBottom: idx < channels.length - 1 ? "1px solid var(--border)" : "none",
-                opacity: ch.is_active ? 1 : 0.5,
+                opacity: dragIdx === idx ? 0.4 : (ch.is_active ? 1 : 0.5),
+                cursor: "grab",
               }}
             >
-              {/* 순서 조정 */}
-              <div className="flex flex-col gap-0.5">
-                <button
-                  onClick={() => handleMove(idx, -1)}
-                  disabled={idx === 0 || isPending}
-                  className="text-xs leading-none disabled:opacity-20 hover:text-[var(--accent-2)] transition-colors"
-                  style={{ color: "var(--muted)" }}
-                >
-                  ▴
-                </button>
-                <button
-                  onClick={() => handleMove(idx, 1)}
-                  disabled={idx === channels.length - 1 || isPending}
-                  className="text-xs leading-none disabled:opacity-20 hover:text-[var(--accent-2)] transition-colors"
-                  style={{ color: "var(--muted)" }}
-                >
-                  ▾
-                </button>
-              </div>
+              {/* 드래그 핸들 */}
+              <span
+                className="text-sm select-none shrink-0"
+                style={{ color: "var(--border)", cursor: "grab" }}
+              >
+                ⠿
+              </span>
 
               {/* 채널 정보 */}
               <div className="flex-1 min-w-0">

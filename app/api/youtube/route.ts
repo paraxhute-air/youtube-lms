@@ -130,7 +130,10 @@ export async function GET(request: Request) {
       finalVideos = finalVideos.filter(v => /[가-힣a-zA-Z]/.test(v.title));
     }
 
-    return NextResponse.json({ videos: finalVideos, nextPageToken: searchData.nextPageToken ?? null });
+    return NextResponse.json(
+      { videos: finalVideos, nextPageToken: searchData.nextPageToken ?? null },
+      { headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" } },
+    );
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: "Failed to fetch videos" }, { status: 500 });

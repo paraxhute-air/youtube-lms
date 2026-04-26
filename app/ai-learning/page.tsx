@@ -125,16 +125,16 @@ const PLATFORM_COLOR: Record<string, string> = {
 
 export default async function AiLearningPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/auth");
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) redirect("/auth");
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("display_name")
-    .eq("id", user.id)
+    .eq("id", session.user.id)
     .single();
 
-  const displayName = profile?.display_name ?? user.email?.split("@")[0] ?? "user";
+  const displayName = profile?.display_name ?? session.user.email?.split("@")[0] ?? "user";
 
   return (
     <div className="flex min-h-screen">

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import type { YoutubeVideo } from "@/app/api/youtube/route";
 
 function StarIcon({ filled }: { filled: boolean }) {
@@ -52,11 +53,13 @@ export function VideoCard({ video, wishlisted = false, onToggleWishlist }: Props
     >
       {/* 썸네일 + 제목 — 클릭 시 플레이어로 이동 */}
       <Link href={`/watch/${video.id}`} className="flex flex-col flex-1">
-        <div className="relative overflow-hidden">
-          <img
+        <div className="relative overflow-hidden aspect-video">
+          <Image
             src={video.thumbnail}
             alt={video.title}
-            className="w-full aspect-video object-cover group-hover:scale-105 transition-transform duration-300"
+            fill
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            className="object-cover group-hover:scale-105 transition-transform duration-300"
           />
           {video.duration && (
             <span

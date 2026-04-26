@@ -157,7 +157,7 @@ html[data-theme="solarized-light"] {
   --color-accent-3: var(--accent-3);
   --color-danger:   var(--danger);
   --color-warn:     var(--warn);
-  --font-mono:      "JetBrains Mono", ui-monospace, monospace;
+  --font-mono:      var(--font-jetbrains), ui-monospace, monospace;
 }
 
 /* ── Base styles ─────────────────────────────────────────── */
@@ -173,7 +173,7 @@ body {
   min-height: 100%;
   background-color: var(--bg);
   color: var(--fg);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
   font-size: 14px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;

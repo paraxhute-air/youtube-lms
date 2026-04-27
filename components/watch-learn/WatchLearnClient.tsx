@@ -7,6 +7,8 @@ import type { YoutubeVideo } from "@/app/api/youtube/route";
 const hasKo = (s: string) => /[가-힣]/.test(s);
 const isKoreanVideo = (v: { title: string; channelTitle: string }) =>
   hasKo(v.title) || hasKo(v.channelTitle);
+const isGlobalVideo = (v: { title: string }) =>
+  /^[\p{Script=Latin}\d\p{Punctuation}\p{Symbol}\s]+$/u.test(v.title);
 
 // ── wishlist helpers ──────────────────────────────────────────
 function loadWishlist(userId: string): Set<string> {
@@ -60,8 +62,11 @@ async function fetchSingle(
   if (pageToken) params.set("pageToken", pageToken);
 
   const res = await fetch(`/api/youtube?${params}`);
-  if (!res.ok) return { videos: [], nextPageToken: null };
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (data.error) throw new Error(data.error);
+    return { videos: [], nextPageToken: null };
+  }
   return { videos: data.videos ?? [], nextPageToken: data.nextPageToken ?? null };
 }
 
@@ -182,7 +187,7 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
   const [sort, setSort]   = useState<SortOrder>("date");
   const [year, setYear]   = useState("");
   const [month, setMonth] = useState("");
-  const [lang, setLang]   = useState<"all" | "ko" | "global">("all");
+  const [lang, setLang]   = useState<"all" | "ko" | "global">("ko");
   const [videos, setVideos]   = useState<YoutubeVideo[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -211,11 +216,7 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
 
   useEffect(() => { setWishlistedIds(loadWishlist(userId)); }, [userId]);
 
-  const displayedVideos = useMemo(() => {
-    if (lang === "ko") return videos.filter(isKoreanVideo);
-    if (lang === "global") return videos.filter(v => !isKoreanVideo(v));
-    return videos;
-  }, [videos, lang]);
+  const displayedVideos = videos;
 
   function toggleWishlist(videoId: string) {
     setWishlistedIds((prev) => {
@@ -322,9 +323,9 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
       const newHasMore = [...newTokens.values()].some((t) => t !== null);
       hasMoreRef.current = newHasMore;
       setHasMore(newHasMore);
-    } catch {
+    } catch (e: any) {
       if (myId === reqIdRef.current) {
-        setError("영상을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
+        setError(e.message || "영상을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
       }
     } finally {
       if (myId === reqIdRef.current) {
@@ -411,14 +412,12 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
   }
 
   function handleLangChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const val = e.target.value;
-    setLang(val);
-    load(selectedIdxs, sort, year, month, val, false);
+    setLang(e.target.value as "all" | "ko" | "global");
   }
 
   // initial load
   useEffect(() => {
-    load(new Set([0]), "date", "", "", "all", false);
+    load(new Set([0]), "date", "", "", "ko", false);
   }, [filters, load]);
 
   // ── render ──────────────────────────────────────────────────
@@ -527,7 +526,7 @@ export function WatchLearnClient({ filters, userId }: { filters: FilterItem[]; u
           style={{ background: "var(--bg-panel)", border: "1px solid var(--border)" }}
         >
           <p className="text-[var(--muted)] text-sm">
-            {videos.length > 0 ? "이 필터에 맞는 영상이 없습니다" : "결과가 없습니다"}
+            {videos.length > 0 ? "이 필터에 맞는 영상이 없습니다" : "조회되는 영상이 없습니다"}
           </p>
         </div>
       ) : (

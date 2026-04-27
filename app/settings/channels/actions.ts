@@ -36,7 +36,7 @@ function parseChannelUrl(input: string): { type: "handle" | "id" | "username"; v
 async function resolveChannel(
   parsed: { type: "handle" | "id" | "username"; value: string },
   apiKey: string,
-): Promise<{ channelId: string; channelName: string } | null> {
+): Promise<{ channelId: string; channelName: string; error?: string } | null> {
   const url = new URL("https://www.googleapis.com/youtube/v3/channels");
   url.searchParams.set("part", "snippet");
   url.searchParams.set("key", apiKey);
@@ -50,9 +50,15 @@ async function resolveChannel(
   }
 
   const res = await fetch(url.toString());
-  if (!res.ok) return null;
+  const data = await res.json().catch(() => ({}));
+  
+  if (!res.ok) {
+    if (res.status === 403 && data.error?.message?.includes("quota")) {
+      return { channelId: "", channelName: "", error: "유튜브 API 일일 검색 한도(Quota)가 초과되었습니다." };
+    }
+    return null;
+  }
 
-  const data = await res.json();
   const channel = data.items?.[0];
   if (!channel) return null;
 
@@ -70,6 +76,7 @@ export async function addChannel(
 
   const resolved = await resolveChannel(parsed, apiKey);
   if (!resolved) return { error: "채널을 찾을 수 없습니다. URL을 확인해주세요" };
+  if (resolved.error) return { error: resolved.error };
 
   const supabase = await createClient();
   const { data, error } = await supabase

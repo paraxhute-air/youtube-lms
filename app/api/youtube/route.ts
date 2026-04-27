@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 
 export interface YoutubeVideo {
   id: string;
@@ -14,131 +15,85 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const keyword = searchParams.get("keyword");
   const channelId = searchParams.get("channelId");
-  const maxResults = searchParams.get("maxResults") ?? "50";
-  const order = searchParams.get("order") ?? (channelId ? "date" : "relevance");
+  const maxResults = parseInt(searchParams.get("maxResults") ?? "50", 10);
+  const order = searchParams.get("order") ?? "date";
   const year = searchParams.get("year");
   const month = searchParams.get("month");
   const lang = searchParams.get("lang") ?? "all"; // 'ko', 'en', 'all'
-  const pageToken = searchParams.get("pageToken");
+  const offset = parseInt(searchParams.get("pageToken") ?? "0", 10);
 
   if (!keyword && !channelId) {
     return NextResponse.json({ error: "keyword or channelId is required" }, { status: 400 });
   }
 
-  const apiKey = process.env.YOUTUBE_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: "API key not configured" }, { status: 500 });
-  }
-
   try {
-    // 1단계: 검색 (키워드 또는 채널)
-    const searchUrl = new URL("https://www.googleapis.com/youtube/v3/search");
-    searchUrl.searchParams.set("part", "snippet");
-    searchUrl.searchParams.set("type", "video");
-    searchUrl.searchParams.set("maxResults", maxResults);
-    searchUrl.searchParams.set("key", apiKey);
+    const supabase = await createClient();
 
+    let query = supabase.from("youtube_videos").select("*", { count: "exact" });
+
+    // 필터링 적용
     if (channelId) {
-      searchUrl.searchParams.set("channelId", channelId);
-    } else {
-      searchUrl.searchParams.set("q", keyword!);
-      if (lang === "ko" || lang === "en") {
-        searchUrl.searchParams.set("relevanceLanguage", lang);
-      }
-      if (lang === "en") {
-        searchUrl.searchParams.set("regionCode", "US");
-      }
-      // lang=all: relevanceLanguage 미설정 — 전체 언어 결과 반환
+      query = query.contains("matched_channels", [channelId]);
+    } else if (keyword) {
+      query = query.contains("matched_keywords", [keyword]);
     }
-    searchUrl.searchParams.set("order", order);
-    if (pageToken) searchUrl.searchParams.set("pageToken", pageToken);
+
+    if (lang === "ko") {
+      query = query.eq("is_korean", true);
+    } else if (lang === "en" || lang === "global") {
+      query = query.eq("is_global", true);
+    }
 
     if (year) {
       if (month) {
         const y = parseInt(year);
         const m = parseInt(month);
-        const startDate = new Date(y, m - 1, 1);
-        const endDate = new Date(y, m, 0, 23, 59, 59, 999);
-        searchUrl.searchParams.set("publishedAfter", startDate.toISOString());
-        searchUrl.searchParams.set("publishedBefore", endDate.toISOString());
+        const startDate = new Date(Date.UTC(y, m - 1, 1));
+        const endDate = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
+        query = query.gte("published_at", startDate.toISOString());
+        query = query.lte("published_at", endDate.toISOString());
       } else {
-        searchUrl.searchParams.set("publishedAfter", `${year}-01-01T00:00:00Z`);
-        searchUrl.searchParams.set("publishedBefore", `${year}-12-31T23:59:59Z`);
+        query = query.gte("published_at", `${year}-01-01T00:00:00Z`);
+        query = query.lte("published_at", `${year}-12-31T23:59:59Z`);
       }
     }
 
-    const searchRes = await fetch(searchUrl.toString(), { next: { revalidate: 3600 } });
-    if (!searchRes.ok) throw new Error("YouTube search failed");
+    // 정렬
+    if (order === "viewCount") {
+      query = query.order("view_count", { ascending: false });
+    } else {
+      query = query.order("published_at", { ascending: false });
+    }
 
-    const searchData = await searchRes.json();
-    const items = searchData.items ?? [];
-    const videoIds = items
-      .map((i: { id: { videoId: string } }) => i.id.videoId)
-      .filter(Boolean)
-      .join(",");
+    // 페이지네이션
+    query = query.range(offset, offset + maxResults - 1);
 
-    if (!videoIds) return NextResponse.json({ videos: [] });
+    const { data, error, count } = await query;
 
-    // 2단계: 상세 정보 (조회수, 길이)
-    const videoUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
-    videoUrl.searchParams.set("part", "statistics,contentDetails");
-    videoUrl.searchParams.set("id", videoIds);
-    videoUrl.searchParams.set("key", apiKey);
+    if (error) {
+      console.error("DB Query Error:", error);
+      throw new Error("Failed to fetch videos from DB");
+    }
 
-    const videoRes = await fetch(videoUrl.toString(), { next: { revalidate: 3600 } });
-    const videoData = videoRes.ok ? await videoRes.json() : { items: [] };
+    const finalVideos: YoutubeVideo[] = data.map((v) => ({
+      id: v.id,
+      title: v.title,
+      channelTitle: v.channel_title,
+      thumbnail: v.thumbnail,
+      publishedAt: v.published_at,
+      viewCount: v.view_count.toString(),
+      duration: v.duration,
+    }));
 
-    const statsMap = new Map(
-      (videoData.items ?? []).map((v: {
-        id: string;
-        statistics: { viewCount: string };
-        contentDetails: { duration: string };
-      }) => [
-        v.id,
-        { viewCount: v.statistics?.viewCount ?? "0", duration: v.contentDetails?.duration ?? "" },
-      ]),
-    );
-
-    let finalVideos: YoutubeVideo[] = items.map((item: {
-      id: { videoId: string };
-      snippet: {
-        title: string;
-        channelTitle: string;
-        thumbnails: { medium?: { url: string }; default?: { url: string } };
-        publishedAt: string;
-      };
-    }) => {
-      const stats = statsMap.get(item.id.videoId) as { viewCount: string; duration: string } | undefined;
-      return {
-        id: item.id.videoId,
-        title: item.snippet.title,
-        channelTitle: item.snippet.channelTitle,
-        thumbnail:
-          item.snippet.thumbnails.medium?.url ??
-          item.snippet.thumbnails.default?.url ??
-          "",
-        publishedAt: item.snippet.publishedAt,
-        viewCount: stats?.viewCount ?? "0",
-        duration: parseDuration(stats?.duration ?? ""),
-      };
-    });
+    const nextOffset = offset + data.length;
+    const hasMore = count !== null && nextOffset < count;
 
     return NextResponse.json(
-      { videos: finalVideos, nextPageToken: searchData.nextPageToken ?? null },
-      { headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" } },
+      { videos: finalVideos, nextPageToken: hasMore ? nextOffset.toString() : null },
+      { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=3600" } }
     );
-  } catch (e) {
+  } catch (e: any) {
     console.error(e);
     return NextResponse.json({ error: "Failed to fetch videos" }, { status: 500 });
   }
-}
-
-function parseDuration(iso: string): string {
-  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-  if (!match) return "";
-  const h = parseInt(match[1] ?? "0");
-  const m = parseInt(match[2] ?? "0");
-  const s = parseInt(match[3] ?? "0");
-  if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  return `${m}:${s.toString().padStart(2, "0")}`;
 }

@@ -85,7 +85,7 @@ export async function GET(request: Request) {
       if (!videoRes.ok) return;
 
       const videoData = await videoRes.json();
-      const statsMap = new Map(
+      const statsMap = new Map<string, { viewCount: number; duration: string }>(
         (videoData.items ?? []).map((v: any) => [
           v.id,
           {
